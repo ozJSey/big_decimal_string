@@ -86,13 +86,14 @@ const total = price.multiply(quantity);
 
 console.log(`Total: $${total.toFormat()}`);  // "Total: $1,299,990,000.00"
 
-// Tax calculations
+// Tax calculations (use precision 4 for rates like 8.25%, then round to 2 for currency)
 const subtotal = bd("999.99");
-const tax = subtotal.multiply("0.0825");
+const taxRate = bd("0.0825", 4);  // 8.25% - specify precision for small decimals
+const tax = subtotal.multiply(taxRate).setScale(2);  // Round to 2 decimals
 const grandTotal = subtotal.add(tax);
 
-console.log(`Tax: $${tax.toFormat()}`);         // "Tax: $82.49"
-console.log(`Total: $${grandTotal.toFormat()}`); // "Total: $1,082.48"
+console.log(`Tax: $${tax.toFormat()}`);         // "Tax: $82.50"
+console.log(`Total: $${grandTotal.toFormat()}`); // "Total: $1,082.49"
 ```
 
 ### Dashboard / Analytics
@@ -227,11 +228,11 @@ console.log(`Wei: ${ethBalance.toFormat()}`);     // "1,500,000,000,000,000,000.
 ```typescript
 const marketCap = bd("2.5e12");       // $2.5 trillion
 const volume = bd("987654321");
-const priceChange = bd("-0.0234");
+const priceChange = bd("-2.34");      // Already as percentage
 
 console.log(`Market Cap: $${marketCap.toFormat()}`);  // "$2,500,000,000,000.00"
 console.log(`Volume: ${volume.toFormat()}`);          // "987,654,321.00"
-console.log(`Change: ${priceChange.multiply(100).toString()}%`);  // "-2.34%"
+console.log(`Change: ${priceChange.toString()}%`);    // "-2.34%"
 ```
 
 ### Shopping Cart
@@ -246,12 +247,12 @@ const items = [
 const subtotal = BigDecimal.sum(
   ...items.map(item => bd(item.price).multiply(item.qty))
 );
-const tax = subtotal.multiply("0.08");
+const tax = subtotal.multiply("0.08");  // 8% tax
 const total = subtotal.add(tax);
 
 console.log(`Subtotal: $${subtotal.toFormat()}`);  // "$2,899.94"
-console.log(`Tax: $${tax.toFormat()}`);           // "$231.99"
-console.log(`Total: $${total.toFormat()}`);       // "$3,131.93"
+console.log(`Tax: $${tax.toFormat()}`);            // "$232.00"
+console.log(`Total: $${total.toFormat()}`);        // "$3,131.94"
 ```
 
 ## TypeScript Native
