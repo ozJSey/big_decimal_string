@@ -1,0 +1,51 @@
+{
+  "name": "bigdecimal-string",
+  "version": "1.0.0",
+  "description": "Precise decimal arithmetic for JavaScript using BigInt. Avoids floating-point errors with a chainable, immutable API.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "bigdecimal",
+    "decimal",
+    "precision",
+    "arithmetic",
+    "bigint",
+    "financial",
+    "money",
+    "currency",
+    "floating-point",
+    "math"
+  ],
+  "author": "ozJSey",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ozJSey/big_decimal_string.git"
+  },
+  "homepage": "https://github.com/ozJSey/big_decimal_string#readme",
+  "bugs": {
+    "url": "https://github.com/ozJSey/big_decimal_string/issues"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  }
+}
