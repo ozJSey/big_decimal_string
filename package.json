@@ -1,22 +1,20 @@
 {
   "name": "bigdecimal-string",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Precise decimal arithmetic for JavaScript using BigInt. Avoids floating-point errors with a chainable, immutable API.",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "main": "dist/index.min.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "require": "./dist/index.min.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"

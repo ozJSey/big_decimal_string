@@ -47,7 +47,7 @@ bd("9876543210.99").toFormat();     // "9,876,543,210.99" ✓
 - **Precise decimals** - Solves the `0.1 + 0.2` problem using BigInt internally
 - **Native TypeScript** - Written in TypeScript, full type inference, no `@types` needed
 - **Chainable API** - Fluent method chaining for calculations
-- **Zero dependencies** - Pure TypeScript, ~4KB minified
+- **Zero dependencies** - Pure TypeScript, ~6KB minified
 - **Immutable** - All operations return new instances
 
 ## Installation
