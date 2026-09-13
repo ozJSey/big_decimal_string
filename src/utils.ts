@@ -1,4 +1,5 @@
 import type { RoundingMode } from "./types";
+import type { BigDecimal } from "./big-decimal";
 import { RoundingMode as RoundingModeEnum } from "./types";
 
 /**
@@ -51,9 +52,9 @@ export function scientificToPlain(sci: string): string {
  * Align two BigDecimals to the same scale
  */
 export function alignScales(
-  a: { scale: number; setScale(newScale: number): any },
-  b: { scale: number; setScale(newScale: number): any }
-): [any, any] {
+  a: BigDecimal,
+  b: BigDecimal
+): [BigDecimal, BigDecimal] {
   if (a.scale === b.scale) {
     return [a, b];
   }

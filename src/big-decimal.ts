@@ -30,7 +30,7 @@ export class BigDecimal {
   /** Internal representation: value * 10^scale */
   private readonly unscaledValue: bigint;
   /** Number of decimal places */
-  private readonly scale: number;
+  readonly scale: number;
 
   /**
    * Creates a new BigDecimal instance
