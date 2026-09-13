@@ -1,6 +1,6 @@
 # @ozjsey/bigdecimal-string
 
-[![npm version](https://img.shields.io/npm/v/bigdecimal-string.svg)](https://www.npmjs.com/package/@ozjsey/bigdecimal-string)
+[![npm version](https://img.shields.io/npm/v/@ozjsey/bigdecimal-string.svg)](https://www.npmjs.com/package/@ozjsey/bigdecimal-string)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Native-blue.svg)](https://www.typescriptlang.org/)
 
