@@ -1,4 +1,4 @@
-# bigdecimal-string
+# @ozjsey/bigdecimal-string
 
 [![npm version](https://img.shields.io/npm/v/bigdecimal-string.svg)](https://www.npmjs.com/package/bigdecimal-string)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -27,7 +27,7 @@ console.log(price);               // 0.30000000000000004 - wrong!
 ## The Solution
 
 ```typescript
-import { bd } from 'bigdecimal-string';
+import { bd } from '@ozjsey/bigdecimal-string';
 
 // Large numbers become readable
 bd("1e15").toString();              // "1000000000000000.00"
@@ -53,7 +53,7 @@ bd("9876543210.99").toFormat();     // "9,876,543,210.99" ✓
 ## Installation
 
 ```bash
-npm install bigdecimal-string
+npm install @ozjsey/bigdecimal-string
 ```
 
 ## Usage Examples
@@ -63,7 +63,7 @@ npm install bigdecimal-string
 The primary use case - converting scientific notation or large numbers into displayable strings:
 
 ```typescript
-import { bd } from 'bigdecimal-string';
+import { bd } from '@ozjsey/bigdecimal-string';
 
 // API returns scientific notation? No problem.
 const apiValue = "2.5e12";  // From server
@@ -260,7 +260,7 @@ console.log(`Total: $${total.toFormat()}`);        // "$3,131.94"
 Unlike alternatives that require separate `@types` packages or have incomplete type definitions, **bigdecimal-string is written in TypeScript from the ground up**.
 
 ```typescript
-import { BigDecimal, bd, BigDecimalInput, RoundingMode } from 'bigdecimal-string';
+import { BigDecimal, bd, BigDecimalInput, RoundingMode } from '@ozjsey/bigdecimal-string';
 
 // Full type inference - no 'any' types
 function formatPrice(amount: BigDecimalInput): string {

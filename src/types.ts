@@ -1,3 +1,5 @@
+import type { BigDecimal } from './big-decimal';
+
 /**
  * BigDecimal input types - can be created from multiple formats
  */

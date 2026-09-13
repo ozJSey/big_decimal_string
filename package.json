@@ -1,5 +1,5 @@
 {
-  "name": "bigdecimal-string",
+  "name": "@ozjsey/bigdecimal-string",
   "version": "1.1.0",
   "description": "Precise decimal arithmetic for JavaScript using BigInt. Avoids floating-point errors with a chainable, immutable API.",
   "main": "dist/index.min.js",
@@ -45,5 +45,8 @@
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
