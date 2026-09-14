@@ -1,3 +1,6 @@
+import { BigDecimal } from './big-decimal';
+import { type BigDecimalInput } from './types';
+
 // Export types and enums
 export type { BigDecimalInput, BigDecimalConfig } from "./types";
 export { RoundingMode } from "./types";
@@ -17,8 +20,8 @@ export { BigDecimal } from "./big-decimal";
 export { BigDecimal as default } from "./big-decimal";
 
 // Factory function for convenience
-import { BigDecimal } from "./big-decimal";
-import type { BigDecimalInput } from "./types";
+
+
 
 export function bd(value?: BigDecimalInput, precision?: number): BigDecimal {
   return new BigDecimal(value, precision);

@@ -38,11 +38,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ozJSey/big_decimal_string.git"
+    "url": "git+https://github.com/ozjsey/big_decimal_string.git"
   },
-  "homepage": "https://github.com/ozJSey/big_decimal_string#readme",
+  "homepage": "https://github.com/ozjsey/big_decimal_string#readme",
   "bugs": {
-    "url": "https://github.com/ozJSey/big_decimal_string/issues"
+    "url": "https://github.com/ozjsey/big_decimal_string/issues"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
