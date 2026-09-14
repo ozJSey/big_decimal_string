@@ -14,6 +14,9 @@ describe("README Claims Verification", () => {
 
     it("should display large numbers without scientific notation", () => {
       // README claims: bd("1e15").toString();  // "1000000000000000.00"
+      // Note: String(1e15) is already "1000000000000000" — doubles do not go
+      // exponential until 1e21. The claim this test pins is the scale, not the
+      // notation. See playground card 03.
       expect(bd("1e15").toString()).toBe("1000000000000000.00");
     });
 
@@ -302,9 +305,13 @@ describe("README Claims Verification", () => {
   });
 
   describe("Why Not Just Use toLocaleString section", () => {
-    it("should handle 1e21 which toLocaleString cannot", () => {
-      // JavaScript's toLocaleString fails: (1e21).toLocaleString() returns "1e+21"
-      // README claims: bd("1e21").toFormat(); // "1,000,000,000,000,000,000,000.00" ✓
+    it("should format 1e21 with a scale, which toLocaleString does not carry", () => {
+      // NOT "toLocaleString returns 1e+21" — it does not. On any engine with ICU,
+      // (1e21).toLocaleString() is "1,000,000,000,000,000,000,000". That sentence
+      // stood in this comment and in the README for two releases because nothing
+      // here ever evaluated the left-hand side; the playground card computes it
+      // live, which is how it was caught. What the library adds at this size is
+      // the fixed scale, and past 2^53 it is the digits themselves.
       expect(bd("1e21").toFormat()).toBe("1,000,000,000,000,000,000,000.00");
     });
   });

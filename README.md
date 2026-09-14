@@ -1,10 +1,19 @@
 # @ozjsey/bigdecimal-string
 
+> **[Live demo and documentation](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string)** — eleven cards, each running the same expression in plain JavaScript and through this library, side by side.
+>
+> Start at [**the REPL**](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/repl): type any two operands, pick an operation, and read both
+> answers. Then [the 0.1 + 0.2 family](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/precise-decimals) ·
+> [where scientific notation actually starts](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/scientific-notation) ·
+> [past 2^53](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/precision-loss) · [all seven rounding modes](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/rounding-modes) ·
+> [the checkout](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/currency)
+
+
 [![npm version](https://img.shields.io/npm/v/@ozjsey/bigdecimal-string.svg)](https://www.npmjs.com/package/@ozjsey/bigdecimal-string)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Native-blue.svg)](https://www.typescriptlang.org/)
 
-**Display really large numbers on screen without scientific notation.** Convert `1e15` to `"1,000,000,000,000,000.00"` - human readable, formatted, and precise.
+**Exact decimal numbers you can put on screen.** Every digit kept, a scale that stays put, thousand separators on request, and never scientific notation — `bd("1e21").toFormat()` is `"1,000,000,000,000,000,000,000.00"` and `bd("0.1").add("0.2")` is `"0.30"`.
 
 **Written in TypeScript. Full type safety. No `@types` package needed.**
 
@@ -12,17 +21,29 @@
 
 ## The Problem
 
-JavaScript displays large numbers in scientific notation, making them unreadable for users:
-
 ```javascript
-const bigNumber = 1000000000000000;
-console.log(bigNumber);           // 1e+15 - not user friendly!
-console.log(bigNumber.toString()); // "1000000000000000" - no formatting
-
-// Even worse with decimals
+// Decimal arithmetic is not decimal
 const price = 0.1 + 0.2;
-console.log(price);               // 0.30000000000000004 - wrong!
+console.log(price);                       // 0.30000000000000004
+
+// Digits past 2^53 are gone, not rounded
+console.log(Number("9007199254740993"));  // 9007199254740992
+
+// Scientific notation, in both directions
+console.log(String(1e21));                // "1e+21"
+console.log(String(0.00000001));          // "1e-8"
+
+// And nothing carries a scale: the cent column disappears
+console.log(String(9876543210.50));       // "9876543210.5"
 ```
+
+**Where the thresholds actually are** — these are worth knowing, because two of them used to be
+misstated here. A double prints in full up to `1e21`, so `1e15` is *not* displayed as `1e+15`;
+below `1e-6` it switches to exponential going the other way; and `toLocaleString()` groups
+`1e21` correctly on any engine with ICU, which is every browser. What breaks at every size is
+precision past 2^53, the missing scale, and decimal arithmetic itself. Each of those is
+[demonstrated live](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string) with the
+plain-JavaScript answer computed in the page rather than quoted.
 
 ## The Solution
 
@@ -42,7 +63,7 @@ bd("9876543210.99").toFormat();     // "9,876,543,210.99" ✓
 
 ## Features
 
-- **Human-readable large numbers** - No more `1e15`, display `1,000,000,000,000,000.00`
+- **Human-readable large numbers** - Never exponential, at any magnitude, and exact past 2^53 where `Number` is not
 - **Prettify with commas** - `toFormat()` adds thousand separators automatically
 - **Precise decimals** - Solves the `0.1 + 0.2` problem using BigInt internally
 - **Native TypeScript** - Written in TypeScript, full type inference, no `@types` needed
@@ -128,11 +149,13 @@ bd("19.99")
 
 ### Creating Instances
 
+> [Creating instances — and the comma that is not stripped](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/parsing) runs every form below,
+> including the grouped-string trap in the note that follows.
+
 ```typescript
 // From string (recommended)
 bd("123.45")
 bd("1e15")           // Scientific notation OK
-bd("1,234.56")       // Commas are stripped
 
 // From number
 bd(123.45)
@@ -143,7 +166,15 @@ bd("123.456", 3)     // 3 decimal places
 bd("100", 4)         // "100.0000"
 ```
 
+> **Do not feed formatted output back in.** `bd("1,234.56")` returns `"1.234"` — the parser splits
+> on the comma and keeps the first two segments, so a grouped string becomes a different number
+> without throwing. `toFormat()` is an output step only; keep the ungrouped string as the value.
+> Tracked in `CHANGELOG.md` under open defects.
+
 ### Formatting Methods
+
+> [`toString` / `prettify` / `toFormat` / `toFixed`](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/formatting), with `Intl` doing its best in
+> the next column — they agree at dashboard sizes, and the card says where they stop agreeing.
 
 ```typescript
 const value = bd("1234567.89");
@@ -260,7 +291,8 @@ console.log(`Total: $${total.toFormat()}`);        // "$3,131.94"
 Unlike alternatives that require separate `@types` packages or have incomplete type definitions, **bigdecimal-string is written in TypeScript from the ground up**.
 
 ```typescript
-import { BigDecimal, bd, BigDecimalInput, RoundingMode } from '@ozjsey/bigdecimal-string';
+import { BigDecimal, bd, RoundingMode } from '@ozjsey/bigdecimal-string';
+import type { BigDecimalInput } from '@ozjsey/bigdecimal-string';
 
 // Full type inference - no 'any' types
 function formatPrice(amount: BigDecimalInput): string {
@@ -286,13 +318,25 @@ const rounded = bd("10.555").setScale(2, RoundingMode.HALF_UP);
 
 ## Why Not Just Use `toLocaleString()`?
 
-```javascript
-// toLocaleString fails with large numbers
-(1e21).toLocaleString();  // "1e+21" - still scientific!
+> Both limitations below, measured live: [past 2^53, where `Intl` formats the number it was
+> given](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/precision-loss), and
+> [where scientific notation actually starts](https://ozjsey.github.io/npm-portfolio-playground/#bigdecimal-string/scientific-notation).
 
-// Our solution works
-bd("1e21").toFormat();    // "1,000,000,000,000,000,000,000.00" ✓
+For a value a double can hold, at a size a human reads, **you often can** — and the playground says
+so on the card rather than staging a fight. `Intl.NumberFormat` groups `1e21` perfectly well on any
+engine with ICU. Two things it cannot do:
+
+```javascript
+// 1. It formats the number it was handed. The digits were lost at parse time.
+Number("123456789012345678901").toLocaleString();  // "123,456,789,012,345,680,000"
+bd("123456789012345678901").toFormat();            // "123,456,789,012,345,678,901.00" ✓
+
+// 2. It has no scale of its own, so a value keeps whatever precision it drifted to.
+(0.1 + 0.2).toLocaleString();                      // "0.3" — rounded for display, still 0.30000000000000004
+bd("0.1").add("0.2").toFormat();                   // "0.30" — and it IS 0.30
 ```
+
+A formatter cannot undo a parse. That is the whole argument.
 
 ## License
 
