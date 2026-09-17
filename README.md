@@ -64,11 +64,11 @@ bd("9876543210.99").toFormat();     // "9,876,543,210.99" ✓
 ## Features
 
 - **Human-readable large numbers** - Never exponential, at any magnitude, and exact past 2^53 where `Number` is not
-- **Prettify with commas** - `toFormat()` adds thousand separators automatically
+- **Prettify with commas** - `toFormat()` adds group separators, and reads the same configurable `.`/`,` standard the parser does
 - **Precise decimals** - Solves the `0.1 + 0.2` problem using BigInt internally
 - **Native TypeScript** - Written in TypeScript, full type inference, no `@types` needed
 - **Chainable API** - Fluent method chaining for calculations
-- **Zero dependencies** - Pure TypeScript, ~6KB minified
+- **Zero dependencies** - Pure TypeScript, 8.1 KB minified (ESM; measured, not estimated)
 - **Immutable** - All operations return new instances
 
 ## Installation
@@ -164,12 +164,54 @@ bd(1000000000000000)
 // With custom precision
 bd("123.456", 3)     // 3 decimal places
 bd("100", 4)         // "100.0000"
+
+// With a separator config, in place of the precision
+bd("1,234.56")                                // 1234.56 — grouped input is read, not stripped
+bd("1.234,56", { decimal: ",", group: "." })  // 1234.56
 ```
 
-> **Do not feed formatted output back in.** `bd("1,234.56")` returns `"1.234"` — the parser splits
-> on the comma and keeps the first two segments, so a grouped string becomes a different number
-> without throwing. `toFormat()` is an output step only; keep the ungrouped string as the value.
-> Tracked in `CHANGELOG.md` under open defects.
+> **Grouped input is validated, never stripped.** `bd("1,234.56")` is 1234.56, and `toFormat()`
+> output reads straight back in. What does not happen is a silent reinterpretation: `bd("1,23")`
+> **throws**, because under the default standard `,` groups thousands and `1,23` is not a valid
+> group — and the only thing worse than refusing it would be reading a European `1,23` as `123`.
+> Say which you mean: `bd("1,23", { decimal: ",", group: "." })` is 1.23.
+> (Before 1.2.1 `bd("1,234.56")` returned `"1.234"`. See `CHANGELOG.md`.)
+
+### Separator standard
+
+`.` decimal and `,` grouping by default, configurable per call and app-wide, and the same pair is
+used for reading and for writing — which is what makes the round trip hold.
+
+```typescript
+import { BigDecimal, bd } from '@ozjsey/bigdecimal-string';
+
+// Default: "." decimal, "," grouping
+bd("1,234.56").toString();                                // "1234.56"
+bd("1234567.89").toFormat();                              // "1,234,567.89"
+
+// Per call
+bd("1.234,56", { decimal: ",", group: "." }).toString();  // "1234.56"
+bd("1234567.89").toFormat({ decimal: ",", group: "." });  // "1.234.567,89"
+bd("1234567.89").toFormat({ group: " " });                // "1 234 567.89"
+
+// App-wide default; a per-call config still wins
+BigDecimal.setConfig({ decimal: ",", group: "." });
+BigDecimal.getConfig();                                   // { decimal: ",", group: "." }
+bd("1.234,56").toString();                                // "1234,56"
+
+// Anything ambiguous throws instead of guessing
+bd("1,23");     // SyntaxError — 1.23, or malformed grouping? Say which.
+bd("12,34.5");  // SyntaxError — after the first group, every group must be exactly 3
+bd("1.2.3");    // SyntaxError — two decimal separators
+```
+
+The round trip is a pinned test, in both dialects:
+
+```typescript
+const cfg = { decimal: ",", group: "." } as const;
+const x = bd("9876543210.99");
+bd(x.toFormat(cfg), cfg).equals(x);  // true
+```
 
 ### Formatting Methods
 
@@ -202,6 +244,14 @@ bd("100.00").multiply(2);            // "200.00"
 bd("100.00").divide(3);              // "33.33"
 bd("10.00").mod(3);                  // "1.00"
 
+// An operand is read at ITS OWN scale, so these two are the same expression
+bd("0.10").add("0.005").toString();      // "0.105"
+bd("0.10").add(bd("0.005")).toString();  // "0.105"
+
+bd("100.00").multiply("0.005").toString();            // "0.500"
+bd("1").divide("0.003").toString();                   // "333.33"
+BigDecimal.sum("0.001", "0.001", "0.001").toString(); // "0.003"
+
 // Chaining
 bd("1000")
   .subtract("100")
@@ -229,6 +279,10 @@ bd("50").negate();      // "-50.00"
 bd("0").isZero();       // true
 bd("10").isPositive();  // true
 bd("-10").isNegative(); // true
+
+// A scale is a count of decimal places, and an exponent is a whole number
+bd("123.45").setScale(-1);  // RangeError  (before 1.2.1: "1.2")
+bd("1e");                   // SyntaxError (before 1.2.1: "0.10")
 ```
 
 ### Static Methods

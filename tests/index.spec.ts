@@ -86,6 +86,19 @@ describe("BigDecimal", () => {
     it("should support plus() alias", () => {
       expect(bd("10").plus("5").toString()).toBe("15.00");
     });
+
+    // BD-1: the operand used to be re-parsed at the RECEIVER's scale, so
+    // "0.005" was rounded to 0.01 before it was ever added. Every suite below
+    // gains the same shape — an operand with MORE decimals than the receiver —
+    // because its absence is exactly why 122 tests stayed green over the bug.
+    it("should keep an operand that has more decimals than the receiver", () => {
+      expect(bd("1.00").add("0.005").toString()).toBe("1.005");
+      expect(bd("0.10").add("0.005").add("0.005").toString()).toBe("0.110");
+    });
+
+    it("should treat a string operand exactly like a wrapped one", () => {
+      expect(bd("1.00").add("0.005").toString()).toBe(bd("1.00").add(bd("0.005")).toString());
+    });
   });
 
   describe("Subtraction", () => {
@@ -105,6 +118,16 @@ describe("BigDecimal", () => {
 
     it("should support minus() alias", () => {
       expect(bd("10").minus("3").toString()).toBe("7.00");
+    });
+
+    it("should keep an operand that has more decimals than the receiver", () => {
+      expect(bd("1.00").subtract("0.005").toString()).toBe("0.995");
+    });
+
+    it("should treat a string operand exactly like a wrapped one", () => {
+      expect(bd("1.00").subtract("0.005").toString()).toBe(
+        bd("1.00").subtract(bd("0.005")).toString()
+      );
     });
   });
 
@@ -127,6 +150,17 @@ describe("BigDecimal", () => {
 
     it("should support times() alias", () => {
       expect(bd("5").times(3).toString()).toBe("15.00");
+    });
+
+    it("should keep an operand that has more decimals than the receiver", () => {
+      expect(bd("100.00").multiply("0.005").toString()).toBe("0.500");
+      expect(bd("1.00").multiply("0.0001").toString()).toBe("0.0001");
+    });
+
+    it("should treat a string operand exactly like a wrapped one", () => {
+      expect(bd("100.00").multiply("0.005").toString()).toBe(
+        bd("100.00").multiply(bd("0.005")).toString()
+      );
     });
   });
 
@@ -153,6 +187,16 @@ describe("BigDecimal", () => {
     it("should support dividedBy() alias", () => {
       expect(bd("10").dividedBy(2).toString()).toBe("5.00");
     });
+
+    it("should divide by an operand that has more decimals than the receiver", () => {
+      // Used to throw "Division by zero": "0.003" was re-parsed at scale 2.
+      expect(bd("1").divide("0.003").toString()).toBe("333.33");
+      expect(bd("1").divide("0.003", 4).toString()).toBe("333.3333");
+    });
+
+    it("should treat a string operand exactly like a wrapped one", () => {
+      expect(bd("1").divide("0.003").toString()).toBe(bd("1").divide(bd("0.003")).toString());
+    });
   });
 
   describe("Modulo", () => {
@@ -163,6 +207,12 @@ describe("BigDecimal", () => {
 
     it("should throw on mod by zero", () => {
       expect(() => bd("10").mod(0)).toThrow("Division by zero");
+    });
+
+    it("should take the remainder against an operand with more decimals", () => {
+      // Used to throw "Division by zero" for the same reason as divide().
+      expect(bd("1.00").mod("0.003").toString()).toBe("0.001");
+      expect(bd("1.00").mod("0.003").toString()).toBe(bd("1.00").mod(bd("0.003")).toString());
     });
   });
 
@@ -222,6 +272,18 @@ describe("BigDecimal", () => {
       expect(bd("10.00").compareTo("5.00")).toBe(1);
       expect(bd("5.00").compareTo("10.00")).toBe(-1);
       expect(bd("10.00").compareTo("10.00")).toBe(0);
+    });
+
+    it("should not round an operand into equality with the receiver", () => {
+      // bd("0.10").equals("0.104") answered TRUE: "0.104" was re-parsed at the
+      // receiver's scale 2 and became 0.10.
+      expect(bd("0.10").equals("0.104")).toBe(false);
+      expect(bd("0.10").lessThan("0.101")).toBe(true);
+      expect(bd("0.10").compareTo("0.104")).toBe(-1);
+    });
+
+    it("should treat a string operand exactly like a wrapped one", () => {
+      expect(bd("0.10").equals("0.104")).toBe(bd("0.10").equals(bd("0.104")));
     });
   });
 
@@ -365,6 +427,10 @@ describe("BigDecimal", () => {
       expect(BigDecimal.sum().toString()).toBe("0.00");
     });
 
+    it("should sum sub-cent values without flattening them to the seed's scale", () => {
+      expect(BigDecimal.sum("0.001", "0.001", "0.001").toString()).toBe("0.003");
+    });
+
     it("should get max value", () => {
       expect(BigDecimal.max("10", "5", "20", "15").toString()).toBe("20.00");
       expect(BigDecimal.max(-5, -10, -3).toString()).toBe("-3.00");
@@ -416,6 +482,57 @@ describe("BigDecimal", () => {
       expect(bd("2.5", 1).setScale(0, RoundingMode.HALF_EVEN).toString()).toBe("2");
       expect(bd("3.5", 1).setScale(0, RoundingMode.HALF_EVEN).toString()).toBe("4");
       expect(bd("2.6", 1).setScale(0, RoundingMode.HALF_EVEN).toString()).toBe("3");
+    });
+  });
+
+  describe("Rounding Modes — negative ties", () => {
+    // Probed correct but unpinned before BD-1. A tie on the negative side is
+    // where HALF_UP / HALF_DOWN / HALF_EVEN visibly disagree, so it is the one
+    // place the three modes cannot be confused for each other.
+    it("HALF_UP sends a negative tie away from zero", () => {
+      expect(bd("-2.5", 1).setScale(0, RoundingMode.HALF_UP).toString()).toBe("-3");
+      expect(bd("-0.125", 3).setScale(2, RoundingMode.HALF_UP).toString()).toBe("-0.13");
+    });
+
+    it("HALF_DOWN sends a negative tie toward zero", () => {
+      expect(bd("-2.5", 1).setScale(0, RoundingMode.HALF_DOWN).toString()).toBe("-2");
+      expect(bd("-0.125", 3).setScale(2, RoundingMode.HALF_DOWN).toString()).toBe("-0.12");
+    });
+
+    it("HALF_EVEN sends a negative tie to the even neighbour", () => {
+      expect(bd("-2.5", 1).setScale(0, RoundingMode.HALF_EVEN).toString()).toBe("-2");
+      expect(bd("-3.5", 1).setScale(0, RoundingMode.HALF_EVEN).toString()).toBe("-4");
+      expect(bd("-0.125", 3).setScale(2, RoundingMode.HALF_EVEN).toString()).toBe("-0.12");
+      expect(bd("-0.135", 3).setScale(2, RoundingMode.HALF_EVEN).toString()).toBe("-0.14");
+    });
+  });
+
+  describe("Guards", () => {
+    it("rejects a negative scale instead of returning a truncated value", () => {
+      // bd("123.45").setScale(-1) answered "1.2" — not tens-rounding, garbage.
+      expect(() => bd("123.45").setScale(-1)).toThrow(RangeError);
+      expect(() => bd("123.45").toFixed(-1)).toThrow(RangeError);
+      expect(() => bd("1.5", -1)).toThrow(RangeError);
+      expect(() => bd("10").divide(3, -1)).toThrow(RangeError);
+    });
+
+    it("rejects a fractional scale", () => {
+      expect(() => bd("1.5", 1.5)).toThrow(RangeError);
+      expect(() => bd("123.45").toFixed(1.5)).toThrow(RangeError);
+    });
+
+    it("rejects a dangling or malformed exponent instead of reading it as 0.10", () => {
+      expect(() => bd("1e")).toThrow(SyntaxError);
+      expect(() => bd("1e+")).toThrow(SyntaxError);
+      expect(() => bd("1ee5")).toThrow(SyntaxError);
+      expect(() => bd("1e2.5")).toThrow(SyntaxError);
+    });
+
+    it("still accepts every well-formed exponent", () => {
+      expect(bd("1e2").toString()).toBe("100.00");
+      expect(bd("1E2").toString()).toBe("100.00");
+      expect(bd("1e+2").toString()).toBe("100.00");
+      expect(bd("4e-2").toString()).toBe("0.04");
     });
   });
 

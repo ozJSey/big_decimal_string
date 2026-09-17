@@ -2,10 +2,14 @@
  * This test file verifies every code example in the README
  * to ensure all claims are accurate.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { BigDecimal, bd, BigDecimalInput, RoundingMode } from "../src";
 
 describe("README Claims Verification", () => {
+  // The separator section sets an app-wide default; nothing after it may
+  // inherit that.
+  afterEach(() => BigDecimal.setConfig({ decimal: ".", group: "," }));
+
   describe("The Problem / The Solution section", () => {
     it("should solve the 0.1 + 0.2 problem", () => {
       // README claims: bd('0.1').add('0.2').eq('0.3');  // true ✓
@@ -114,6 +118,56 @@ describe("README Claims Verification", () => {
     });
   });
 
+  describe("API Reference - Creating Instances, separator forms", () => {
+    it("reads grouped input instead of stripping it", () => {
+      // README claims: bd("1,234.56") // 1234.56 — grouped input is read, not stripped
+      expect(bd("1,234.56").toString()).toBe("1234.56");
+    });
+
+    it("reads the flipped dialect when told to", () => {
+      // README claims: bd("1.234,56", { decimal: ",", group: "." }) // 1234.56
+      expect(bd("1.234,56", { decimal: ",", group: "." }).toString()).toBe("1234.56");
+    });
+
+    it('throws on "1,23" rather than answering 1.23 or 123', () => {
+      // README claims: bd("1,23") // SyntaxError
+      expect(() => bd("1,23")).toThrow(SyntaxError);
+      // README claims: bd("1,23", { decimal: ",", group: "." }) is 1.23
+      expect(bd("1,23", { decimal: ",", group: "." }).toString()).toBe("1.23");
+    });
+  });
+
+  describe("API Reference - Separator standard", () => {
+    it("runs the default-dialect block", () => {
+      expect(bd("1,234.56").toString()).toBe("1234.56");
+      expect(bd("1234567.89").toFormat()).toBe("1,234,567.89");
+    });
+
+    it("runs the per-call block", () => {
+      expect(bd("1.234,56", { decimal: ",", group: "." }).toString()).toBe("1234.56");
+      expect(bd("1234567.89").toFormat({ decimal: ",", group: "." })).toBe("1.234.567,89");
+      expect(bd("1234567.89").toFormat({ group: " " })).toBe("1 234 567.89");
+    });
+
+    it("runs the app-wide block", () => {
+      BigDecimal.setConfig({ decimal: ",", group: "." });
+      expect(BigDecimal.getConfig()).toEqual({ decimal: ",", group: "." });
+      expect(bd("1.234,56").toString()).toBe("1234,56");
+    });
+
+    it("runs the throwing block", () => {
+      expect(() => bd("1,23")).toThrow(SyntaxError);
+      expect(() => bd("12,34.5")).toThrow(SyntaxError);
+      expect(() => bd("1.2.3")).toThrow(SyntaxError);
+    });
+
+    it("runs the round-trip block", () => {
+      const cfg = { decimal: ",", group: "." } as const;
+      const x = bd("9876543210.99");
+      expect(bd(x.toFormat(cfg), cfg).equals(x)).toBe(true);
+    });
+  });
+
   describe("API Reference - Formatting Methods", () => {
     it("should format with toString options", () => {
       const value = bd("1234567.89");
@@ -152,6 +206,19 @@ describe("README Claims Verification", () => {
 
     it("should perform modulo", () => {
       expect(bd("10.00").mod(3).toString()).toBe("1.00");
+    });
+
+    it("should read an operand at its own scale — string and wrapped are the same expression", () => {
+      // README claims both lines are "0.105"
+      expect(bd("0.10").add("0.005").toString()).toBe("0.105");
+      expect(bd("0.10").add(bd("0.005")).toString()).toBe("0.105");
+    });
+
+    it("should run the sub-cent operand block", () => {
+      // README claims: "0.500", "333.33", "0.003"
+      expect(bd("100.00").multiply("0.005").toString()).toBe("0.500");
+      expect(bd("1").divide("0.003").toString()).toBe("333.33");
+      expect(BigDecimal.sum("0.001", "0.001", "0.001").toString()).toBe("0.003");
     });
 
     it("should chain operations", () => {
@@ -207,6 +274,12 @@ describe("README Claims Verification", () => {
 
     it("should check isNegative", () => {
       expect(bd("-10").isNegative()).toBe(true);
+    });
+
+    it("should reject a negative scale and a dangling exponent", () => {
+      // README claims: RangeError and SyntaxError respectively
+      expect(() => bd("123.45").setScale(-1)).toThrow(RangeError);
+      expect(() => bd("1e")).toThrow(SyntaxError);
     });
   });
 

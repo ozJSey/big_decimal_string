@@ -10,12 +10,98 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 > registry's own metadata — and nothing is written down that neither can support. Where the record
 > is silent, this file says so rather than guessing.
 
-## [1.2.0] — UNRELEASED
+## [1.2.1] — 2026-09-17
 
-Not on npm. `package.json` carries this number so that the local tree and the published 1.1.0 are
-never the same version describing two different artifacts — the ESM fix below changes what the
-tarball contains, and a reader must be able to tell which one they have. Publishing is the owner's
-call.
+Supersedes `1.2.0` (published 2026-09-14T10:01:33Z).
+
+### Fixed
+
+- **An operand is parsed at its own scale, not the receiver's.** `add`, `subtract`, `multiply`,
+  `divide`, `mod` and `compareTo` each wrapped a raw operand with
+  `new BigDecimal(other, this.scale)`, which rounded it to the receiver's scale *before* any
+  arithmetic happened. Every one of these was wrong on the published 1.2.0, and every one of them
+  was already right if you wrapped the operand yourself:
+
+  | expression | 1.2.0 | 1.2.1 |
+  |---|---|---|
+  | `bd("100.00").multiply("0.005")` | `"1.00"` | `"0.500"` |
+  | `bd("1").divide("0.003")` | throws `Division by zero` | `"333.33"` |
+  | `BigDecimal.sum("0.001","0.001","0.001")` | `"0.00"` | `"0.003"` |
+  | `bd("0.10").add("0.005").add("0.005")` | `"0.12"` | `"0.110"` |
+  | `bd("1.00").mod("0.003")` | throws `Division by zero` | `"0.001"` |
+  | `bd("0.10").equals("0.104")` | `true` | `false` |
+
+  122 tests stayed green over this for two releases because no suite had a case where the operand
+  carried more decimals than the receiver. Every arithmetic suite now has one, plus a
+  string-equals-wrapped assertion per operation.
+
+- **Grouped input is read, not truncated.** `bd("1,234.56")` returned `"1.234"`: `parse()` split on
+  `/[.,]/` and kept the first two segments, so a grouped string silently became a different number,
+  and `toFormat()` output could not be read back. Both now work — see the separator standard below.
+
+- **A scale must be a non-negative integer.** `bd("123.45").setScale(-1)` returned `"1.2"`, which is
+  not tens-rounding, just a string sliced at a negative index. `setScale`, `toFixed`, the
+  constructor's `precision` and `divide`'s `precision` now throw `RangeError`. Real negative-scale
+  semantics remain out of scope; this closes the wrong-output hole.
+
+- **A dangling exponent is rejected.** `bd("1e")`, `bd("1e+")`, `bd("1ee5")` and `bd("1e2.5")` all
+  returned a number (`"0.10"`, `"0.10"`, `"0.10"`, `"100.00"`) because `parseInt("")` is `NaN` and
+  the `NaN` fell through unnoticed. They now throw `SyntaxError`.
+
+### Added
+
+- **A separator standard, and `BigDecimalConfig` is real.** `.` decimal and `,` grouping by default;
+  override per call (`bd("1.234,56", { decimal: ",", group: "." })`, `toFormat(cfg)`) or app-wide
+  (`BigDecimal.setConfig(cfg)`, read back with `BigDecimal.getConfig()`), per-call winning.
+  `group: ""` accepts and emits no grouping; `" "` is allowed as a group separator.
+
+  **Grouping is validated, never stripped.** Only two shapes are accepted: no separators at all, or
+  a first group of 1-3 digits followed by groups of exactly 3. `"1,23"` throws with a message
+  naming both readings rather than becoming `123` — comma-stripping would have been the same
+  silent corruption in a different coat. `"12,34.5"` (malformed grouping), `"1.2.3"` (two decimal
+  separators) and `"1.234,56"` under the default dialect (group separator after the decimal
+  separator) all throw as well.
+
+  The parser and `toString`/`toFormat` read the same config, so `bd(x.toFormat(cfg), cfg).equals(x)`
+  holds in both dialects. That is a pinned test now; before this release the library could not read
+  its own formatted output at all.
+
+- `src/separators.ts` — the one module that decides what `.` and `,` mean, in both directions.
+
+### Changed
+
+- **`BigDecimalConfig` changed shape.** It was `{ precision?, roundingMode? }`, exported from the
+  entry and referenced by nothing — no parameter, no return type, no overload in any version. It is
+  now `{ decimal?, group? }`, the config the constructor, `toString`, `toFormat` and
+  `BigDecimal.setConfig` actually take. A type-only change to a dead export, which is why this is a
+  patch; if you had imported the old shape by hand, it is gone.
+- The `bd()` / `BigDecimal` second argument is now `number | BigDecimalConfig` — a number is still
+  the precision.
+- `toString()`, `toFixed()` and `toFormat()` accept separator overrides. Default output is
+  unchanged, character for character.
+- `src/utils.ts`: `addThousandSeparators` moved into `separators.ts` as `groupIntegerDigits`
+  (it now takes the group character), and `scientificToPlain` was replaced by `splitExponent` +
+  `shiftDecimalPoint`, which work on already-split digit strings. Internal modules; nothing in the
+  public surface referenced either.
+
+### Verified
+
+- 175 unit tests, `vitest`. Negative controls run for every fix: restoring
+  `new BigDecimal(other, this.scale)` at the six call sites turns exactly the 12 operand-scale
+  tests red; stripping the group separator instead of validating it turns the 4 invalid/ambiguous
+  rows red (and `bd("1,23")` answers `123.00`); hard-coding a comma in `groupIntegerDigits` turns
+  the 5 round-trip/app-config tests red; dropping the `assertScale` calls turns the 2 guard tests
+  red; dropping the exponent check turns the 1 exponent test red.
+- Negative `HALF_UP` / `HALF_DOWN` / `HALF_EVEN` ties are now pinned (`-2.5` → `-3` / `-2` / `-2`,
+  `-3.5` → `-4` under `HALF_EVEN`). They were already correct and untested.
+
+## [1.2.0] — 2026-09-14
+
+Published to npm at 2026-09-14T10:01:33Z (registry metadata; `dist-tags.latest` is `1.2.0`).
+
+> The tarball that was published carries a CHANGELOG whose own heading for this version reads
+> `[1.2.0] — UNRELEASED / Not on npm`. It was written before the publish and never updated. The
+> heading above is the correction; the registry is the source of truth, not this file.
 
 ### Fixed
 
@@ -27,16 +113,13 @@ call.
   `module` alongside `main`. Confirmed by loading the built package through each entry point.
   This restores what 1.0.0 had; see the 1.1.0 entry below for how it was lost.
 
-### Not fixed — open defects found while building the playground tab
+### Known defects, shipped
 
-These are recorded here because they are live on the published version, not because they are done.
+Recorded here because they went out with this version. All are fixed in 1.2.1 above.
 
-- **`bd("1,234.56")` returns `"1.234"`.** The README's API reference states "Commas are stripped".
-  They are not: `parse()` splits the input on `/[.,]/` and keeps only the first two segments, so a
-  grouped string is silently truncated to a different number instead of throwing. The same defect
-  means the library cannot read its own `toFormat()` output back — `bd(bd("1234567.89").toFormat())`
-  is `"1.234"`. Demonstrated live on playground card `11-parsing`, and asserted by
-  `scripts/interactions/bigdecimal-string.mjs` so that fixing it turns the assertion red.
+- `bd("1,234.56")` returns `"1.234"`, so `toFormat()` output cannot be read back.
+- Every raw operand is coerced to the receiver's scale, so `bd("100.00").multiply("0.005")` is
+  `"1.00"` and `bd("1").divide("0.003")` throws.
 
 ### Documentation
 
@@ -66,7 +149,7 @@ registry therefore holds no version history for the unscoped name, and none is r
   `{ types, import: "./dist/index.mjs", require: "./dist/index.js" }`. `a66e78e` replaced it with
   `{ types, require: "./dist/index.min.js" }` in the same commit that introduced minification.
   Nothing in the commit message or the README mentions it, and the README continued to document
-  `import { bd } from "…"` throughout. Treated as unintended; see Unreleased.
+  `import { bd } from "…"` throughout. Treated as unintended; see 1.2.0 above.
 
 ## [1.0.0] — 2026-01-31
 
@@ -84,4 +167,4 @@ Initial release, as the unscoped `bigdecimal-string` (`09cc0ac`). No longer on t
   `HALF_EVEN`.
 - Dual ESM + CJS build with an `exports` map declaring both.
 - `17c55b8` ("making sure all claims in readme is fully tested") added `tests/readme-claims.spec.ts`
-  alongside `tests/index.spec.ts`; 122 tests between them today.
+  alongside `tests/index.spec.ts`; 122 tests between them through 1.2.0, 175 at 1.2.1.

@@ -1,5 +1,5 @@
 import { BigDecimal } from './big-decimal';
-import { type BigDecimalInput } from './types';
+import { type BigDecimalConfig, type BigDecimalInput } from './types';
 
 // Export types and enums
 export type { BigDecimalInput, BigDecimalConfig } from "./types";
@@ -15,6 +15,7 @@ export { BigDecimal } from "./big-decimal";
  * ```ts
  * const price = bd("19.99");
  * const total = bd(100).subtract(25).multiply(2);
+ * const eu = bd("1.234,56", { decimal: ",", group: "." });
  * ```
  */
 export { BigDecimal as default } from "./big-decimal";
@@ -23,6 +24,6 @@ export { BigDecimal as default } from "./big-decimal";
 
 
 
-export function bd(value?: BigDecimalInput, precision?: number): BigDecimal {
-  return new BigDecimal(value, precision);
+export function bd(value?: BigDecimalInput, options?: number | BigDecimalConfig): BigDecimal {
+  return new BigDecimal(value, options);
 }

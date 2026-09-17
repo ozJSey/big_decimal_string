@@ -19,9 +19,24 @@
  * ```
  */
 
-import type { BigDecimalInput } from "./types";
+import type { BigDecimalConfig, BigDecimalInput } from "./types";
 import { RoundingMode } from "./types";
-import { powerOf10, addThousandSeparators, scientificToPlain, alignScales, roundDivision } from "./utils";
+import {
+  powerOf10,
+  assertScale,
+  splitExponent,
+  shiftDecimalPoint,
+  alignScales,
+  roundDivision,
+} from "./utils";
+import {
+  CANONICAL_SEPARATORS,
+  getSeparators,
+  groupIntegerDigits,
+  resolveSeparators,
+  setSeparators,
+  splitDecimalString,
+} from "./separators";
 
 const DEFAULT_PRECISION = 2;
 const DEFAULT_ROUNDING_MODE = RoundingMode.HALF_UP;
@@ -35,9 +50,18 @@ export class BigDecimal {
   /**
    * Creates a new BigDecimal instance
    * @param value - The value to create from (string, number, bigint, or another BigDecimal)
-   * @param precision - Number of decimal places (default: auto-detected or 2)
+   * @param options - A number is the precision (decimal places); an object is a
+   *                  separator config for reading the string, e.g.
+   *                  `bd("1.234,56", { decimal: ",", group: "." })`
    */
-  constructor(value?: BigDecimalInput, precision?: number) {
+  constructor(value?: BigDecimalInput, options?: number | BigDecimalConfig) {
+    const precision = typeof options === "number" ? options : undefined;
+    const config = typeof options === "object" ? options : undefined;
+
+    if (precision !== undefined) {
+      assertScale(precision, "precision");
+    }
+
     if (value === null || value === undefined || value === "") {
       this.unscaledValue = 0n;
       this.scale = precision ?? DEFAULT_PRECISION;
@@ -56,7 +80,7 @@ export class BigDecimal {
       return;
     }
 
-    const parsed = BigDecimal.parse(value, precision);
+    const parsed = BigDecimal.parse(value, precision, config);
     this.unscaledValue = parsed.unscaledValue;
     this.scale = parsed.scale;
   }
@@ -66,7 +90,8 @@ export class BigDecimal {
    */
   private static parse(
     value: string | number | bigint,
-    precision?: number
+    precision: number | undefined,
+    config: BigDecimalConfig | undefined
   ): { unscaledValue: bigint; scale: number } {
     if (typeof value === "bigint") {
       const scale = precision ?? DEFAULT_PRECISION;
@@ -76,21 +101,22 @@ export class BigDecimal {
       };
     }
 
-    let str = typeof value === "number" ? value.toString() : value;
-
-    // Handle scientific notation
-    if (/[eE]/.test(str)) {
-      str = scientificToPlain(str);
-    }
+    // A JavaScript number has exactly one spelling and the language chose it,
+    // so numeric input is read canonically even when the app has configured a
+    // different pair for strings.
+    const separators = typeof value === "number" ? CANONICAL_SEPARATORS : resolveSeparators(config);
+    const raw = typeof value === "number" ? value.toString() : value.trim();
 
     // Handle sign
-    const isNegative = str.startsWith("-");
-    if (isNegative || str.startsWith("+")) {
-      str = str.slice(1);
-    }
+    const isNegative = raw.startsWith("-");
+    const body = isNegative || raw.startsWith("+") ? raw.slice(1) : raw;
 
-    // Split integer and decimal parts
-    const [intPart, decPart = ""] = str.split(/[.,]/);
+    // Split off the exponent, then read the mantissa under the configured
+    // separators, then move the point. Each step throws rather than guessing.
+    const { mantissa, exponent } = splitExponent(body);
+    const written = splitDecimalString(mantissa, separators);
+    const { intPart, fracPart: decPart } =
+      exponent === 0 ? written : shiftDecimalPoint(written.intPart, written.fracPart, exponent);
 
     // Determine scale
     const detectedScale = decPart.length;
@@ -148,7 +174,12 @@ export class BigDecimal {
    * @returns A new BigDecimal with the result
    */
   add(other: BigDecimalInput): BigDecimal {
-    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other, this.scale);
+    // The operand is parsed at its OWN natural scale, never coerced to this
+    // one — `new BigDecimal(other, this.scale)` rounded "0.005" to 0.01 before
+    // any arithmetic happened, in all six operations. alignScales and the
+    // per-operation result-scale rules then do their existing jobs, which is
+    // why `add("0.005")` and `add(bd("0.005"))` now agree. See CHANGELOG 1.2.1.
+    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other);
     const [a, b] = alignScales(this, otherBd);
     return BigDecimal.fromUnscaled(a.unscaledValue + b.unscaledValue, a.scale);
   }
@@ -158,7 +189,7 @@ export class BigDecimal {
    * @returns A new BigDecimal with the result
    */
   subtract(other: BigDecimalInput): BigDecimal {
-    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other, this.scale);
+    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other);
     const [a, b] = alignScales(this, otherBd);
     return BigDecimal.fromUnscaled(a.unscaledValue - b.unscaledValue, a.scale);
   }
@@ -182,7 +213,7 @@ export class BigDecimal {
    * @returns A new BigDecimal with the result
    */
   multiply(other: BigDecimalInput): BigDecimal {
-    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other, this.scale);
+    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other);
 
     // When multiplying, scales add: (a * 10^s1) * (b * 10^s2) = (a*b) * 10^(s1+s2)
     const rawResult = this.unscaledValue * otherBd.unscaledValue;
@@ -218,10 +249,14 @@ export class BigDecimal {
     precision?: number,
     roundingMode: RoundingMode = DEFAULT_ROUNDING_MODE
   ): BigDecimal {
-    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other, this.scale);
+    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other);
 
     if (otherBd.unscaledValue === 0n) {
       throw new Error("Division by zero");
+    }
+
+    if (precision !== undefined) {
+      assertScale(precision, "precision");
     }
 
     const targetScale = precision ?? this.scale;
@@ -256,7 +291,7 @@ export class BigDecimal {
    * Get the remainder of division
    */
   mod(other: BigDecimalInput): BigDecimal {
-    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other, this.scale);
+    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other);
     const [a, b] = alignScales(this, otherBd);
 
     if (b.unscaledValue === 0n) {
@@ -276,7 +311,7 @@ export class BigDecimal {
    * @returns -1 if this < other, 0 if equal, 1 if this > other
    */
   compareTo(other: BigDecimalInput): -1 | 0 | 1 {
-    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other, this.scale);
+    const otherBd = other instanceof BigDecimal ? other : new BigDecimal(other);
     const [a, b] = alignScales(this, otherBd);
 
     if (a.unscaledValue < b.unscaledValue) return -1;
@@ -412,6 +447,8 @@ export class BigDecimal {
    * Change the scale (number of decimal places)
    */
   setScale(newScale: number, roundingMode: RoundingMode = DEFAULT_ROUNDING_MODE): BigDecimal {
+    assertScale(newScale, "newScale");
+
     if (newScale === this.scale) {
       return this;
     }
@@ -441,18 +478,19 @@ export class BigDecimal {
 
   /**
    * Convert to string representation
-   * @param options - Formatting options
-   * @param options.prettify - Add thousand separators (commas)
+   * @param options - Formatting options, plus any separator overrides
+   * @param options.prettify - Add group separators to the integer part
    *
    * @example
    * ```ts
-   * bd("1234567.89").toString()                    // "1234567.89"
-   * bd("1234567.89").toString({ prettify: true }) // "1,234,567.89"
-   * bd("1e15").toString()                          // "1000000000000000.00"
-   * bd("1e15").toString({ prettify: true })       // "1,000,000,000,000,000.00"
+   * bd("1234567.89").toString()                                      // "1234567.89"
+   * bd("1234567.89").toString({ prettify: true })                    // "1,234,567.89"
+   * bd("1234567.89").toString({ prettify: true, decimal: ",", group: "." }) // "1.234.567,89"
+   * bd("1e15").toString()                                            // "1000000000000000.00"
    * ```
    */
-  toString(options?: { prettify?: boolean }): string {
+  toString(options?: { prettify?: boolean } & BigDecimalConfig): string {
+    const { decimal, group } = resolveSeparators(options);
     const isNegative = this.unscaledValue < 0n;
     const absValue = isNegative ? -this.unscaledValue : this.unscaledValue;
     const sign = isNegative ? "-" : "";
@@ -469,30 +507,32 @@ export class BigDecimal {
       decPart = str.slice(-this.scale);
     }
 
-    // Apply thousand separators if prettify is enabled
+    // Apply group separators if prettify is enabled
     if (options?.prettify) {
-      intPart = addThousandSeparators(intPart);
+      intPart = groupIntegerDigits(intPart, group);
     }
 
     if (this.scale === 0 || !decPart) {
       return `${sign}${intPart}`;
     }
 
-    return `${sign}${intPart}.${decPart}`;
+    return `${sign}${intPart}${decimal}${decPart}`;
   }
 
   /**
-   * Format as a display string with thousand separators
-   * Shorthand for toString({ prettify: true })
+   * Format as a display string with group separators.
+   * Shorthand for `toString({ prettify: true })`, and it reads the same
+   * separator config the parser does, so the output can be read back in.
    *
    * @example
    * ```ts
-   * bd("1234567.89").toFormat()  // "1,234,567.89"
-   * bd("1e12").toFormat()        // "1,000,000,000,000.00"
+   * bd("1234567.89").toFormat()                               // "1,234,567.89"
+   * bd("1234567.89").toFormat({ decimal: ",", group: "." })   // "1.234.567,89"
+   * bd(x.toFormat(cfg), cfg).equals(x)                        // true, both dialects
    * ```
    */
-  toFormat(): string {
-    return this.toString({ prettify: true });
+  toFormat(config?: BigDecimalConfig): string {
+    return this.toString({ prettify: true, ...config });
   }
 
   /**
@@ -500,7 +540,8 @@ export class BigDecimal {
    * @warning Use with caution - JavaScript numbers have limited precision
    */
   toNumber(): number {
-    return parseFloat(this.toString());
+    // parseFloat only reads the canonical spelling, whatever the app config is.
+    return parseFloat(this.toString(CANONICAL_SEPARATORS));
   }
 
   /**
@@ -508,7 +549,8 @@ export class BigDecimal {
    * @param decimals - Number of decimal places
    * @param options - Formatting options
    */
-  toFixed(decimals: number, options?: { prettify?: boolean }): string {
+  toFixed(decimals: number, options?: { prettify?: boolean } & BigDecimalConfig): string {
+    assertScale(decimals, "decimals");
     return this.setScale(decimals).toString(options);
   }
 
@@ -539,6 +581,27 @@ export class BigDecimal {
     (bd as any).unscaledValue = unscaledValue;
     (bd as any).scale = scale;
     return bd;
+  }
+
+  /**
+   * Install the app-wide separator config used for reading and writing numbers.
+   * A per-call config (`bd(value, cfg)`, `toFormat(cfg)`) still wins over it.
+   *
+   * @example
+   * ```ts
+   * BigDecimal.setConfig({ decimal: ",", group: "." });
+   * bd("1.234,56").toString();   // "1234,56"
+   * ```
+   */
+  static setConfig(config: BigDecimalConfig): void {
+    setSeparators(config);
+  }
+
+  /**
+   * Read the app-wide separator config.
+   */
+  static getConfig(): Required<BigDecimalConfig> {
+    return getSeparators();
   }
 
   /**

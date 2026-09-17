@@ -5,7 +5,8 @@
 | File | Owns |
 |---|---|
 | `src/types.ts` | `RoundingMode` (all seven modes), `BigDecimalInput`, `BigDecimalConfig`. No logic, no imports except a type-only reference to the class. |
-| `src/utils.ts` | Five pure functions with no knowledge of the public API: `powerOf10`, `addThousandSeparators`, `scientificToPlain`, `alignScales`, `roundDivision`. Each is total, each is independently testable, none of them holds state. |
+| `src/separators.ts` | What `.` and `,` mean, in both directions: `splitDecimalString` (reading) and `groupIntegerDigits` (writing), plus the app-wide config the two share (`setSeparators`, `getSeparators`, `resolveSeparators`). The only module that holds state, and it holds exactly one pair of characters. |
+| `src/utils.ts` | Six pure functions with no knowledge of the public API: `powerOf10`, `assertScale`, `splitExponent`, `shiftDecimalPoint`, `alignScales`, `roundDivision`. Each is total, each is independently testable, none of them holds state. |
 | `src/big-decimal.ts` | The `BigDecimal` class: parsing, arithmetic, comparison, scale changes, formatting, and the statics. The only module that knows the internal representation. |
 | `src/index.ts` | Thin re-export barrel plus the `bd()` factory. No behaviour. |
 
@@ -25,6 +26,21 @@ field, the logic belongs in the class, not in `utils.ts`.
 private `fromUnscaled` factory. Immutability is not a convention here; there is no code path that
 writes to an existing instance.
 
+## The second invariant: separators are decided in one place
+
+`separators.ts` is the only module that knows which character is a decimal point and which groups
+thousands. `big-decimal.ts` asks it on the way in and on the way out, which is what makes
+`bd(x.toFormat(cfg), cfg)` equal `x`.
+
+Before 1.2.1 there was no such place: `parse()` split on `/[.,]/` and kept the first two segments,
+while `toFormat` hard-coded a comma — two separate opinions, and the library could not read its own
+output (`bd("1,234.56")` was `1.234`). If a second `split(",")` ever appears outside this module,
+the two opinions are back.
+
+Grouping is **validated, never stripped**, which is the other half of the invariant: stripping
+commas would read the European habit `"1,23"` as `123`, so anything not unambiguously grouped
+throws instead of returning a number nobody wrote.
+
 ## Why it is split at all
 
 Most people copy this source into their project rather than installing it, so the readability of the
@@ -42,6 +58,7 @@ operation edits one class and touches neither of the other two.
 | Adding | Goes in |
 |---|---|
 | A rounding mode, an input type, an options interface | `types.ts` |
+| Anything about how a number is written — separators, dialects, validation | `separators.ts` |
 | A pure calculation over `bigint`s or strings | `utils.ts` |
 | An operation, a comparison, a formatter, a static | `big-decimal.ts` |
 | A new export or factory | `index.ts` |
@@ -58,7 +75,8 @@ against it. See `CHANGELOG.md`.
 
 ## Verified where
 
-- `tests/index.spec.ts` and `tests/readme-claims.spec.ts` — 122 unit tests, `vitest`.
+- `tests/index.spec.ts`, `tests/readme-claims.spec.ts` and `tests/separators.spec.ts` — 175 unit
+  tests, `vitest`. Pure BigInt logic, so jsdom is not needed and nothing here is UNPROVEN.
 - `playground/src/demos/bigdecimal-string/` — 11 cards, each rendering the same expression in plain
   JavaScript and through the library, both computed in the browser.
 - `playground/scripts/interactions/bigdecimal-string.mjs` — 70 checks in real Chrome, asserting that

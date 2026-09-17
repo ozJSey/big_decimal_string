@@ -6,13 +6,20 @@ import type { BigDecimal } from './big-decimal';
 export type BigDecimalInput = string | number | bigint | BigDecimal | null | undefined;
 
 /**
- * Configuration options for BigDecimal operations
+ * Which characters a written number uses for the decimal point and for
+ * grouping thousands. The same pair is used for reading and for writing, which
+ * is what makes `bd(x.toFormat(cfg), cfg)` equal `x`.
+ *
+ * Defaults are `decimal: "."` and `group: ","`. Set them per call
+ * (`bd("1.234,56", { decimal: ",", group: "." })`) or app-wide
+ * (`BigDecimal.setConfig({ decimal: ",", group: "." })`); the per-call config
+ * wins. `decimal` and `group` may not be the same symbol.
  */
 export interface BigDecimalConfig {
-  /** Number of decimal places (default: 2) */
-  precision?: number;
-  /** Rounding mode for division and precision changes */
-  roundingMode?: RoundingMode;
+  /** Separates the integer part from the fraction (default: `"."`) */
+  decimal?: "." | ",";
+  /** Groups thousands in the integer part; `""` accepts and emits none (default: `","`) */
+  group?: "," | "." | " " | "";
 }
 
 /**

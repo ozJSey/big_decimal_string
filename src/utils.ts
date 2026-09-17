@@ -11,41 +11,61 @@ export function powerOf10(n: number): bigint {
 }
 
 /**
- * Add thousand separators to an integer string
+ * A scale is a count of decimal places, so anything that is not a non-negative
+ * integer is a bug in the caller rather than a rounding instruction.
+ *
+ * `bd("123.45").setScale(-1)` used to answer "1.2" — not tens-rounding, just a
+ * string sliced at a negative index. Real negative-scale semantics would be a
+ * feature; this is the guard that stops the wrong number in the meantime.
  */
-export function addThousandSeparators(intPart: string): string {
-  return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+export function assertScale(scale: number, label: string): void {
+  if (!Number.isInteger(scale) || scale < 0) {
+    throw new RangeError(`${label} must be a non-negative integer, received ${scale}.`);
+  }
 }
 
 /**
- * Convert scientific notation to plain decimal string
+ * Split a trailing exponent off a written number.
+ *
+ * The exponent must be a whole number. `"1e"` used to parse as 0.10, because
+ * `parseInt("")` is NaN and the NaN then fell through the plain-decimal path
+ * without anything noticing.
  */
-export function scientificToPlain(sci: string): string {
-  if (!/[eE]/.test(sci)) return sci;
+export function splitExponent(body: string): { mantissa: string; exponent: number } {
+  const marker = /[eE]/.exec(body);
+  if (!marker) {
+    return { mantissa: body, exponent: 0 };
+  }
 
-  const [coefficient, expPart] = sci.toLowerCase().split("e");
-  const exponent = parseInt(expPart, 10);
+  const exponentText = body.slice(marker.index + 1);
+  if (!/^[+-]?\d+$/.test(exponentText)) {
+    throw new SyntaxError(
+      `${JSON.stringify(body)} has a malformed exponent: ${JSON.stringify(exponentText)} is not a whole number.`
+    );
+  }
 
-  const isNegative = coefficient.startsWith("-");
-  const cleanCoef = coefficient.replace(/^[-+]/, "");
-  const [intPart, fracPart = ""] = cleanCoef.split(".");
+  return { mantissa: body.slice(0, marker.index), exponent: parseInt(exponentText, 10) };
+}
+
+/**
+ * Move the decimal point across already-split digit strings.
+ * Pure digit shuffling — the point lands at `intPart.length + exponent`.
+ */
+export function shiftDecimalPoint(
+  intPart: string,
+  fracPart: string,
+  exponent: number
+): { intPart: string; fracPart: string } {
   const digits = intPart + fracPart;
-  const sign = isNegative ? "-" : "";
+  const point = intPart.length + exponent;
 
-  if (exponent >= 0) {
-    const totalIntDigits = intPart.length + exponent;
-    if (totalIntDigits >= digits.length) {
-      return sign + digits + "0".repeat(totalIntDigits - digits.length);
-    }
-    return sign + digits.slice(0, totalIntDigits) + "." + digits.slice(totalIntDigits);
+  if (point <= 0) {
+    return { intPart: "", fracPart: "0".repeat(-point) + digits };
   }
-
-  const zerosNeeded = Math.abs(exponent) - intPart.length;
-  if (zerosNeeded >= 0) {
-    return sign + "0." + "0".repeat(zerosNeeded) + digits;
+  if (point >= digits.length) {
+    return { intPart: digits + "0".repeat(point - digits.length), fracPart: "" };
   }
-  const splitPoint = intPart.length + exponent;
-  return sign + digits.slice(0, splitPoint) + "." + digits.slice(splitPoint);
+  return { intPart: digits.slice(0, point), fracPart: digits.slice(point) };
 }
 
 /**
